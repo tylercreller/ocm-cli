@@ -44,10 +44,16 @@ jobs:
       with:
         go-version: 1.18
 
+    - name: OSXCross for CGO Support
+      run: |
+        mkdir ../../osxcross
+        git clone https://github.com/plentico/osxcross-target.git ../../osxcross/target
+
     - name: Create release
       shell: python
       run: |
         import os
+        import platform
         import re
         import requests
         import shutil
@@ -74,7 +80,11 @@ jobs:
             env["GOARCH"] = goarch
 
             # Build the binary:
-            args = ["make", "cmds"]
+            if goos == "darwin":
+                args = ["make", "cmds-darwin-cross"]
+            else:
+                args = ["make", "cmds"]
+
             subprocess.run(check=True, env=env, args=args)
 
             # Copy the generated binary to the assets directory:

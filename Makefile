@@ -33,17 +33,40 @@ cmds:
 		go build "./cmd/$${cmd}" || exit 1; \
 	done
 
+# Used for compiling with CGO_ENABLED=1 (macOS keychain support)
+.PHONY: cmds-cgo
+cmds-cgo:
+	for cmd in $$(ls cmd); do \
+		CGO_ENABLED=1 \
+		go build "./cmd/$${cmd}" || exit 1; \
+	done
+
+# Used for cross-compiling to darwin when building on linux
+# Requires osxcross to be availble at the target path (https://github.com/plentico/osxcross-target.git)
+.PHONY: cmds-darwin-cross
+cmds-darwin-cross:
+	for cmd in $$(ls cmd); do \
+		CGO_ENABLED=1 \
+		CC=/home/runner/work/osxcross/target/bin/o64-clang \
+		CXX=/home/runner/work/osxcross/target/bin/o64-clang++ \
+		go build "./cmd/$${cmd}" || exit 1; \
+	done
+
 .PHONY: install
 install:
 	go install ./cmd/ocm
 
-# CGO_ENABLED=1 is required for Keychain support on macOS
+# CGO_ENABLED=1 is required for keychain support on macOS
 .PHONY: install-cgo
 install-cgo:
 	CGO_ENABLED=1 go install ./cmd/ocm
 
 .PHONY: test tests
 test tests: cmds
+	ginkgo run -r
+
+.PHONY: test-darwin tests-darwin
+test-darwin tests-darwin: cmds-cgo
 	ginkgo run -r
 
 .PHONY: fmt

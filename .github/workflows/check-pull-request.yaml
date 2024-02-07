@@ -57,7 +57,11 @@ jobs:
     - name: Setup Ginkgo
       run: go install github.com/onsi/ginkgo/v2/ginkgo@v2.9
     - name: Run the tests
+      if: ${{ contains(fromJSON('["ubuntu-latest", "windows-latest"]'), matrix.platform) }}
       run: make tests
+    - name: Run the tests
+      if: ${{ contains(fromJSON('["macos-latest"]'), matrix.platform) }}
+      run: make tests-darwin
 
   golangci:
     name: Lint
