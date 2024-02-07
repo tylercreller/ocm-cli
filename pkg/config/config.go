@@ -29,6 +29,7 @@ import (
 	"github.com/golang/glog"
 	homedir "github.com/mitchellh/go-homedir"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	"github.com/openshift-online/ocm-sdk-go/authentication/securestore"
 
 	"github.com/openshift-online/ocm-cli/pkg/debug"
 	"github.com/openshift-online/ocm-cli/pkg/info"
@@ -51,11 +52,88 @@ type Config struct {
 	URL          string   `json:"url,omitempty" doc:"URL of the API gateway. The value can be the complete URL or an alias. The valid aliases are 'production', 'staging' and 'integration'."`
 	User         string   `json:"user,omitempty" doc:"User name."`
 	Pager        string   `json:"pager,omitempty" doc:"Pager command, for example 'less'. If empty no pager will be used."`
+	AuthMethod   string   `json:"auth_method,omitempty" doc:"Authentication method used to login. Valid values are 'token', 'client-credentials', 'auth-code' and 'device-code'"`
 }
 
-// Load loads the configuration from the configuration file. If the configuration file doesn't exist
-// it will return an empty configuration object.
+type AuthMethodType string
+
+const (
+	ClientAuth AuthMethodType = "client-credentials"
+	TokenAuth  AuthMethodType = "token"
+	AuthCode   AuthMethodType = "auth-code"
+	DeviceCode AuthMethodType = "device-code"
+	Password   AuthMethodType = "password"
+)
+
+// Loads the configuration conditionally based on the auth method
+// Should be used for login operations only.
+func LoginLoad(authMethod AuthMethodType) (cfg *Config, err error) {
+	ocmCfg := os.Getenv("OCM_CONFIG")
+	useSecureStore := ocmCfg == securestore.SecureStoreConfigKey ||
+		authMethod == AuthCode || authMethod == DeviceCode
+
+	// If the OCM_CONFIG env var is set to `securestore`,
+	// or auth code/device code flow is being used,
+	// use the OS keyring instead
+	if useSecureStore {
+		loadedCfg, err := loadFromOS()
+		if err != nil {
+			return nil, err
+		}
+		return loadedCfg, nil
+	}
+
+	// Remove any stored config from OS keyring
+	// Swallow error if the OS keyring errors
+	securestore.RemoveConfigFromKeyring()
+	// No OS keyring config exists, load from file
+	return loadFromFile()
+}
+
+// Loads the configuration from the OS keyring first, then attempt to load from the configuration file.
+// Should be used for operations other than login.
 func Load() (cfg *Config, err error) {
+	loadedCfg, _ := loadFromOS()
+	// Swallow error if the OS keyring is not available
+	if loadedCfg != nil {
+		return loadedCfg, nil
+	}
+
+	// No OS keyring config exists, load from file
+	return loadFromFile()
+}
+
+// Loads the configuration from the OS keyring. If the configuration file doesn't exist
+// it will return an empty configuration object.
+func loadFromOS() (cfg *Config, err error) {
+	cfg = &Config{}
+
+	data, err := securestore.GetConfigFromKeyring()
+	if err != nil {
+		if err == securestore.ErrNoBackendsAvailable {
+			return nil, fmt.Errorf("an OS keyring is required for authentication: %v", err)
+		}
+		return nil, fmt.Errorf("can't load config from OS keyring: %v", err)
+	}
+	// No config found, return
+	if len(data) == 0 {
+		return nil, nil
+	}
+	err = json.Unmarshal(data, cfg)
+	if err != nil {
+		// Clear the config from the keyring if it's invalid
+		// so a new one can be created
+		err := securestore.RemoveConfigFromKeyring()
+		if err != nil {
+			return nil, fmt.Errorf("invalid configuration, automatic recovery failed: %v", err)
+		}
+	}
+	return cfg, nil
+}
+
+// Loads the configuration from the configuration file. If the configuration file doesn't exist
+// it will return an empty configuration object.
+func loadFromFile() (cfg *Config, err error) {
 	file, err := Location()
 	if err != nil {
 		return
@@ -94,14 +172,34 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return err
 	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("can't marshal config: %v", err)
+	}
+
+	ocmCfg := os.Getenv("OCM_CONFIG")
+	useSecureStore := ocmCfg == securestore.SecureStoreConfigKey ||
+		cfg.AuthMethod == string(AuthCode) || cfg.AuthMethod == string(DeviceCode)
+
+	// If the OCM_CONFIG env var is set to `securestore`,
+	// or auth code/device code flow is being used,
+	// use the OS keyring instead
+	if useSecureStore {
+		err := securestore.UpsertConfigToKeyring(data)
+		if err != nil {
+			if err == securestore.ErrNoBackendsAvailable {
+				return fmt.Errorf("an OS keyring is required for authentication: %v", err)
+			}
+			return fmt.Errorf("can't save config to OS keyring: %v", err)
+		}
+		return nil
+	}
+
 	dir := filepath.Dir(file)
 	err = os.MkdirAll(dir, os.FileMode(0755))
 	if err != nil {
 		return fmt.Errorf("can't create directory %s: %v", dir, err)
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("can't marshal config: %v", err)
 	}
 	err = os.WriteFile(file, data, 0600)
 	if err != nil {

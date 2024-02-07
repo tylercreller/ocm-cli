@@ -37,6 +37,11 @@ cmds:
 install:
 	go install ./cmd/ocm
 
+# CGO_ENABLED=1 is required for Keychain support on macOS
+.PHONY: install-cgo
+install-cgo:
+	CGO_ENABLED=1 go install ./cmd/ocm
+
 .PHONY: test tests
 test tests: cmds
 	ginkgo run -r
