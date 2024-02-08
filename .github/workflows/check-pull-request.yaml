@@ -56,8 +56,12 @@ jobs:
       run: go mod download
     - name: Setup Ginkgo
       run: go install github.com/onsi/ginkgo/v2/ginkgo@v2.9
-    - name: Run the tests
+    - name: Run the tests (linux, windows)
+      if: ${{ contains(fromJSON('["ubuntu-latest", "windows-latest"]'), matrix.platform) }}
       run: make tests
+    - name: Run the tests (macOS-only)
+      if: ${{ contains(fromJSON('["macos-latest"]'), matrix.platform) }}
+      run: make tests-cgo
 
   golangci:
     name: Lint

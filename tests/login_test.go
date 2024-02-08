@@ -75,7 +75,8 @@ var _ = Describe("Login", func() {
 							"{{ $scope }}"
 						{{ end }}
 					],
-					"access_token": "{{ .accessToken }}"
+					"access_token": "{{ .accessToken }}",
+					"auth_method": "token"
 				}`,
 				"url", sdk.DefaultURL,
 				"tokenURL", ssoServer.URL(),
@@ -122,7 +123,8 @@ var _ = Describe("Login", func() {
 							"{{ $scope }}"
 						{{ end }}
 					],
-					"access_token": "{{ .accessToken }}"
+					"access_token": "{{ .accessToken }}",
+					"auth_method": "client-credentials"
 				}`,
 				"url", sdk.DefaultURL,
 				"tokenURL", ssoServer.URL(),
@@ -171,7 +173,8 @@ var _ = Describe("Login", func() {
 						{{ end }}
 					],
 					"access_token": "{{ .accessToken }}",
-					"refresh_token": "{{ .refreshToken }}"
+					"refresh_token": "{{ .refreshToken }}",
+					"auth_method": "password"
 				}`,
 				"url", sdk.DefaultURL,
 				"tokenURL", ssoServer.URL(),
