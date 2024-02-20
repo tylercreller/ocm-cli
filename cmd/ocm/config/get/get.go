@@ -49,18 +49,19 @@ func init() {
 }
 
 func run(cmd *cobra.Command, argv []string) error {
-	// The following variables are not stored in the configuration file
+	// The following variables are not stored in the configuration
 	// and can skip loading configuration:
 	skipConfigLoadMap := map[string]bool{
 		"keyrings": true,
 	}
 
-	cfg := config.Config{}
+	cfg := &config.Config{}
+	var err error
 	if !skipConfigLoadMap[argv[0]] {
-		// Load the configuration file:
-		cfg, err := config.Load()
+		// Load the configuration:
+		cfg, err = config.Load()
 		if err != nil {
-			return fmt.Errorf("Can't load config file: %v", err)
+			return fmt.Errorf("can't load config: %v", err)
 		}
 		// If the configuration file doesn't exist yet assume that all the configuration settings
 		// are empty:

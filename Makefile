@@ -56,7 +56,7 @@ test tests: cmds
 
 .PHONY: test-cgo tests-cgo
 test-cgo tests-cgo: cmds-cgo
-	ginkgo run -r
+	CGO_ENABLED=1 ginkgo run -r
 
 .PHONY: fmt
 fmt:
